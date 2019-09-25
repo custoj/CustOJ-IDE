@@ -1,6 +1,4 @@
-var BASE_URL = "https://api.judge0.com";
-var SUBMISSION_CHECK_TIMEOUT = 10; // in ms
-var WAIT = localStorageGetItem("wait") == "true";
+var BASE_URL = "http://oj.cust.edu.cn";
 
 var sourceEditor, inputEditor, outputEditor;
 var $selectLanguageBtn, $runBtn, $saveBtn, $vimCheckBox;
@@ -43,25 +41,33 @@ function handleResult(data) {
   timeEnd = performance.now();
   console.log("It took " + (timeEnd - timeStart) + " ms to get submission result.");
 
-  var status = data.status;
-  var stdout = decode(data.stdout || "");
-  var stderr = decode(data.stderr || "");
-  var compile_output = decode(data.compile_output || "");
-  var message = decode(data.message || "");
-  var time = (data.time === null ? "-" : data.time + "s");
-  var memory = (data.memory === null ? "-" : data.memory + "KB");
+  if (data.data.err) {
+    $statusLine.html(`编译错误 - Compile Error`);
+    outputEditor.setValue(data.data.data.replace(/\/judger\/run\/\S+\//g, ""));
+  } else {
+    data = data.data.data[0];
+    var result = data.result;
 
-  $statusLine.html(`${status.description}, ${time}, ${memory}`);
+    if (data.error !== 0) {
+      result = 5;
+    }
+    var time = (data.real_time === null ? "-" : data.real_time + "ms");
+    var memory = (data.memory === null ? "-" : Math.floor(data.memory / 1024 / 1024) + "MB");
+    if (result === -1) {
+      result = 0;
+    }
+    var description = resultMap[result];
 
-  if (status.id == 6) {
-    stdout = compile_output;
-  } else if (status.id == 13) {
-    stdout = message;
-  } else if (status.id != 3 && stderr != "") { // If status is not "Accepted", merge stdout and stderr
-    stdout += (stdout == "" ? "" : "\n") + stderr;
+    $statusLine.html(`${description}, ${time}, ${memory}`);
+    var output = data.output
+    if (data.exit_code !== 0) {
+      output += (output == "" ? "" : "\n") + `[WARN] Exited with code ${data.exit_code}.`
+    }
+    if (data.signal !== 0) {
+      output += (output == "" ? "" : "\n") + `[WARN] Killed by signal ${data.signal}.`
+    }
+    outputEditor.setValue(output);
   }
-
-  outputEditor.setValue(stdout);
 
   updateEmptyIndicator();
   $runBtn.button("reset");
@@ -82,44 +88,23 @@ function run() {
     $runBtn.button("loading");
   }
 
-  var sourceValue = encode(sourceEditor.getValue());
-  var inputValue = encode(inputEditor.getValue());
-  var languageId = $selectLanguageBtn.val();
+  var sourceValue = sourceEditor.getValue();
+  var inputValue = inputEditor.getValue();
+  var language = $selectLanguageBtn.val();
   var data = {
-    source_code: sourceValue,
-    language_id: languageId,
+    src: sourceValue,
+    language: language,
     stdin: inputValue
   };
 
   timeStart = performance.now();
   $.ajax({
-    url: BASE_URL + `/submissions?base64_encoded=true&wait=${WAIT}`,
+    url: BASE_URL + `/api/debug_submission`,
     type: "POST",
     async: true,
     contentType: "application/json",
     data: JSON.stringify(data),
     success: function(data, textStatus, jqXHR) {
-      console.log(`Your submission token is: ${data.token}`);
-      if (WAIT == true) {
-        handleResult(data);
-      } else {
-        setTimeout(fetchSubmission.bind(null, data.token), SUBMISSION_CHECK_TIMEOUT);
-      }
-    },
-    error: handleRunError
-  });
-}
-
-function fetchSubmission(submission_token) {
-  $.ajax({
-    url: BASE_URL + "/submissions/" + submission_token + "?base64_encoded=true",
-    type: "GET",
-    async: true,
-    success: function(data, textStatus, jqXHR) {
-      if (data.status.id <= 2) { // In Queue or Processing
-        setTimeout(fetchSubmission.bind(null, submission_token), SUBMISSION_CHECK_TIMEOUT);
-        return;
-      }
       handleResult(data);
     },
     error: handleRunError
@@ -136,7 +121,7 @@ function focusAndSetCursorAtTheEnd() {
 }
 
 function insertTemplate() {
-  var value = parseInt($selectLanguageBtn.val());
+  var value = $selectLanguageBtn.val();
   sourceEditor.setValue(sources[value]);
   focusAndSetCursorAtTheEnd();
   sourceEditor.markClean();
@@ -243,41 +228,57 @@ var cSource = "\
 #include <stdio.h>\n\
 \n\
 int main() {\n\
-    printf(\"hello, world\\n\");\n\
-    return 0;\n\
+\tprintf(\"hello, world\\n\");\n\
+\treturn 0;\n\
 }\n";
 
 var cppSource = "\
 #include <iostream>\n\
 using namespace std;\n\
 int main() {\n\
-    cout << \"hello, world\" << endl;\n\
-    return 0;\n\
+\tcout << \"hello, world\" << endl;\n\
+\treturn 0;\n\
 }\n";
 
 var javaSource = "\
 public class Main {\n\
-    public static void main(String[] args) {\n\
-        System.out.println(\"hello, world\");\n\
-    }\n\
+\tpublic static void main(String[] args) {\n\
+\t\tSystem.out.println(\"hello, world\");\n\
+\t}\n\
 }\n";
 
 var python3Source = "print(\"hello, world\")\n";
 
 var python2Source = "print \"hello, world\"\n";
 
+var javascriptSource = "console.log(\"hello, world\")\n"
+
+var kotlinSource = "\
+fun main() {\n\
+\tprintln(\"hello, world\")\n\
+}\n"
+
+var scalaSource = "\
+object Main extends App {\n\
+\tprintln(\"hello, world\")\n\
+}\n"
+
 var sources = {
-  7: cSource,
- 13: cppSource,
- 27: javaSource,
- 35: python3Source,
- 36: python2Source
+  "C": cSource,
+  "C++": cppSource,
+  "Java": javaSource,
+  "Python3": python3Source,
+  "Python2": python2Source,
+  "JavaScript": javascriptSource,
+  "Kotlin": kotlinSource,
+  "Scala": scalaSource
 };
 
-var fileNames = {
-  7: "main.c",
- 13: "main.cpp",
- 27: "Main.java",
- 35: "main.py",
- 36: "main.py"
+var resultMap = {
+  0: "运行成功 - Success", 
+  1: "时间超限 - Time Limit Exceeded",
+  2: "时间超限 - Time Limit Exceeded",
+  3: "内存超限 - Memory Limit Exceeded",
+  4: "运行错误 - Runtime Error",
+  5: "系统错误(请联系管理员) - System Error"
 };
