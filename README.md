@@ -1,2 +1,2 @@
 ## About
-Online compiler and IDE for freshmen, temporarily based on [Judge0](https://github.com/judge0/api).
+Online compiler and IDE for freshmen, based on [CustOJ](https://github.com/custoj/backend).
