@@ -1,5 +1,3 @@
-var BASE_URL = "http://oj.cust.edu.cn";
-
 var sourceEditor, inputEditor, outputEditor;
 var $selectLanguageBtn, $runBtn, $saveBtn, $vimCheckBox;
 var $statusLine, $emptyIndicator;
@@ -99,7 +97,7 @@ function run() {
 
   timeStart = performance.now();
   $.ajax({
-    url: BASE_URL + `/api/debug_submission`,
+    url: "/api/debug_submission",
     type: "POST",
     async: true,
     contentType: "application/json",
