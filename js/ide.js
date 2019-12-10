@@ -11,7 +11,7 @@ function decode(bytes) {
   var escaped = escape(atob(bytes));
   try {
     return decodeURIComponent(escaped);
-  } catch {
+  } catch (err) {
     return unescape(escaped);
   }
 }
@@ -280,3 +280,13 @@ var resultMap = {
   4: "运行错误 - Runtime Error",
   5: "系统错误(请联系管理员) - System Error"
 };
+
+window.onbeforeunload = (e) => {
+    return '你代码保存了吗'
+}
+
+function autoFormat() {
+    for (var i=0; i<sourceEditor.lineCount(); i++) {
+	sourceEditor.indentLine(i);
+    }
+}
